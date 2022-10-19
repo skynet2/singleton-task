@@ -32,12 +32,13 @@ func NewSingletonRedLock(
 	key string,
 	fn Fn,
 	ctx context.Context,
+	ttl time.Duration,
 ) Singleton {
 	lock := &singletonRedLock{
 		locker: locker,
 		key:    key,
 		fn:     fn,
-		ttl:    30 * time.Second,
+		ttl:    ttl,
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -47,7 +48,11 @@ func NewSingletonRedLock(
 	lock.cancel = cancel
 
 	host, _ := os.Hostname()
-	lock.logger = log.Logger.With().Str("host", host).Str("key", lock.key).Logger()
+	lock.logger = log.Logger.With().
+		Str("host", host).
+		Str("key", lock.key).
+		Int64("id", time.Now().UnixMicro()).
+		Logger()
 
 	go func() {
 		<-ctx.Done()
@@ -68,6 +73,7 @@ func (s *singletonRedLock) StartAsync() error {
 			lock, err := s.locker.Obtain(s.ctx, s.key, s.ttl, nil)
 
 			if errors.Is(err, redis.ErrClosed) {
+				_ = s.Close()
 				return
 			}
 
@@ -92,19 +98,7 @@ func (s *singletonRedLock) StartAsync() error {
 
 			go func() {
 				defer close(ch)
-				defer func() {
-					if r := recover(); r != nil {
-						var recoverErr error
-						switch reason := r.(type) {
-						case error:
-							recoverErr = errors.Wrap(reason, "got panic")
-						default:
-							recoverErr = errors.New(fmt.Sprintf("got panic for. %+v", reason))
-						}
-
-						ch <- recoverErr
-					}
-				}()
+				defer s.recover(ch)
 
 				for {
 					time.Sleep(s.ttlExtendEvery)
@@ -136,4 +130,18 @@ func (s *singletonRedLock) Close() error {
 	s.cancel()
 
 	return nil
+}
+
+func (s *singletonRedLock) recover(ch chan error) {
+	if r := recover(); r != nil {
+		var recoverErr error
+		switch reason := r.(type) {
+		case error:
+			recoverErr = errors.Wrap(reason, "got panic")
+		default:
+			recoverErr = errors.New(fmt.Sprintf("got panic for. %+v", reason))
+		}
+
+		ch <- recoverErr
+	}
 }
