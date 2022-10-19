@@ -17,3 +17,43 @@ go get github.com/skynet2/singleton-task
 ```
 
 ## Quickstart
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/bsm/redislock"
+	"github.com/go-redis/redis/v9"
+	singletonTask "github.com/skynet2/singleton-task"
+)
+
+func main() {
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+
+	instance := singletonTask.NewSingletonRedLock(redislock.New(redis.NewClient(&redis.Options{
+		Network: "tcp",
+		Addr:    "127.0.0.1:6379",
+	})), "long-running-job", func(ctx context.Context) {
+		for ctx.Err() == nil {
+			fmt.Println("dequeue from queue and send http request.")
+			time.Sleep(1 * time.Second)
+		}
+	}, context.Background(), 30*time.Second)
+
+	if err := instance.StartAsync(); err != nil {
+		panic(err)
+	}
+
+	fmt.Println("awaiting signal")
+	<-sig
+	_ = instance.Close()
+}
+```
+More examples can be found inside tests
