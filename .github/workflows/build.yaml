@@ -34,7 +34,7 @@ jobs:
       - run: cd /source && go mod vendor
       - run: wget -O- -nv https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b /source/
       - run: cd /source && ./golangci-lint run ./... --timeout 5m
-      - run: cd /source && environment=ci go test -json -coverprofile=/root/coverage.txt -covermode=atomic ./... > /root/test.json
+      - run: cd /source && environment=ci REDIS_HOST="redis:6379" go test -json -coverprofile=/root/coverage.txt -covermode=atomic ./... > /root/test.json
       - name: Upload coverage report
         uses: codecov/codecov-action@v3
         with:
