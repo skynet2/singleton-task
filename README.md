@@ -1,7 +1,8 @@
 # singleton-task
 
 ![build workflow](https://github.com/skynet2/singleton-task/actions/workflows/build.yaml/badge.svg?branch=master)
-[![codecov](https://codecov.io/gh/skynet2/singleton-task/branch/master/graph/badge.svg?token=Y71ZQHTLKC)](https://codecov.io/gh/skynet2/singleton-task)[![go-report](https://goreportcard.com/badge/github.com/skynet2/singleton-task)](https://goreportcard.com/report/github.com/skynet2/singleton-task)
+[![codecov](https://codecov.io/gh/skynet2/singleton-task/branch/master/graph/badge.svg?token=Y71ZQHTLKC)](https://codecov.io/gh/skynet2/singleton-task)
+[![go-report](https://goreportcard.com/badge/github.com/skynet2/singleton-task?nocache=true)](https://goreportcard.com/report/github.com/skynet2/singleton-task)
 [![PkgGoDev](https://pkg.go.dev/badge/github.com/skynet2/singleton-task)](https://pkg.go.dev/github.com/skynet2/singleton-task?tab=doc)
 
 ## Description
