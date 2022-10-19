@@ -1,5 +1,7 @@
 package singleton_task
 
+//go:generate mockgen -destination singleton_redlock_mock_test.go -package singleton_task -source=singleton_redlock.go
+
 import (
 	"context"
 	"fmt"
@@ -16,7 +18,7 @@ import (
 )
 
 type singletonRedLock struct {
-	locker         *redislock.Client
+	locker         lockObtainer
 	fn             Fn
 	key            string
 	isClosed       bool
@@ -25,6 +27,10 @@ type singletonRedLock struct {
 	ctx            context.Context
 	cancel         context.CancelFunc
 	logger         zerolog.Logger
+}
+
+type lockObtainer interface {
+	Obtain(ctx context.Context, key string, ttl time.Duration, opt *redislock.Options) (*redislock.Lock, error)
 }
 
 func NewSingletonRedLock(
@@ -66,10 +72,6 @@ func NewSingletonRedLock(
 func (s *singletonRedLock) StartAsync() error {
 	go func() {
 		for s.ctx.Err() == nil {
-			if s.isClosed {
-				return
-			}
-
 			lock, err := s.locker.Obtain(s.ctx, s.key, s.ttl, nil)
 
 			if errors.Is(err, redis.ErrClosed) {
