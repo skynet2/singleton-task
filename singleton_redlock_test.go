@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/bsm/redislock"
-	"github.com/go-redis/redis/v9"
 	"github.com/golang/mock/gomock"
 	"github.com/pkg/errors"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -24,7 +24,7 @@ func TestMultipleInstances(t *testing.T) {
 	instance2Executed := false
 	instance2Stopped := true
 
-	instance1 := NewSingletonRedLock(locker, lockKey, func(ctx context.Context) {
+	instance1 := NewSingletonRedLock(locker, lockKey, func(ctx context.Context) error {
 		assert.Equal(t, true, instance2Stopped)
 		instance1Stopped = false
 		for ctx.Err() == nil {
@@ -32,9 +32,11 @@ func TestMultipleInstances(t *testing.T) {
 			time.Sleep(1 * time.Second)
 		}
 		instance1Stopped = true
+
+		return nil
 	}, context.Background(), 3*time.Second)
 
-	instance2 := NewSingletonRedLock(locker, lockKey, func(ctx context.Context) {
+	instance2 := NewSingletonRedLock(locker, lockKey, func(ctx context.Context) error {
 		instance2Stopped = false
 		assert.Equal(t, true, instance1Stopped)
 		for ctx.Err() == nil {
@@ -42,6 +44,8 @@ func TestMultipleInstances(t *testing.T) {
 			time.Sleep(1 * time.Second)
 		}
 		instance2Stopped = true
+
+		return nil
 	}, context.Background(), 3*time.Second)
 
 	assert.NoError(t, instance1.StartAsync())
@@ -72,7 +76,7 @@ func TestSwitchAfterPanic(t *testing.T) {
 	instance2Executed := false
 	instance2Stopped := true
 
-	instance1 := NewSingletonRedLock(locker1, lockKey, func(ctx context.Context) {
+	instance1 := NewSingletonRedLock(locker1, lockKey, func(ctx context.Context) error {
 		assert.Equal(t, true, instance2Stopped)
 		instance1Stopped = false
 		for ctx.Err() == nil {
@@ -80,10 +84,12 @@ func TestSwitchAfterPanic(t *testing.T) {
 			time.Sleep(1 * time.Second)
 		}
 		instance1Stopped = true
+
+		return nil
 	}, context.Background(), 3*time.Second).(*singletonRedLock)
 
 	time.Sleep(1 * time.Second)
-	instance2 := NewSingletonRedLock(locker2, lockKey, func(ctx context.Context) {
+	instance2 := NewSingletonRedLock(locker2, lockKey, func(ctx context.Context) error {
 		instance2Stopped = false
 		assert.Equal(t, true, instance1Stopped)
 		for ctx.Err() == nil {
@@ -91,6 +97,8 @@ func TestSwitchAfterPanic(t *testing.T) {
 			time.Sleep(1 * time.Second)
 		}
 		instance2Stopped = true
+
+		return nil
 	}, context.Background(), 3*time.Second)
 
 	assert.NoError(t, instance1.StartAsync())

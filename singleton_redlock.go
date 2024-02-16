@@ -9,12 +9,12 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
 	"github.com/bsm/redislock"
-	"github.com/go-redis/redis/v9"
 )
 
 type singletonRedLock struct {
@@ -72,51 +72,75 @@ func NewSingletonRedLock(
 func (s *singletonRedLock) StartAsync() error {
 	go func() {
 		for s.ctx.Err() == nil {
-			lock, err := s.locker.Obtain(s.ctx, s.key, s.ttl, nil)
+			func() {
+				ctx, cancel := context.WithCancel(s.ctx)
+				defer cancel()
 
-			if errors.Is(err, redis.ErrClosed) {
-				_ = s.Close()
-				return
-			}
+				lock, err := s.locker.Obtain(ctx, s.key, s.ttl, nil)
 
-			if errors.Is(err, redislock.ErrNotObtained) {
-				continue
-			}
-
-			if err != nil {
-				s.logger.Err(errors.Wrap(err, "unexpected error from redislock")).Send()
-				continue
-			}
-
-			s.logger.Info().Msg("i am leader of the lock")
-
-			ctx, cancel := context.WithCancel(s.ctx)
-
-			go func() {
-				s.fn(ctx)
-			}()
-
-			ch := make(chan error)
-
-			go func() {
-				defer close(ch)
-				defer s.recover(ch)
-
-				for {
+				if errors.Is(err, redis.ErrClosed) {
+					_ = s.Close()
 					time.Sleep(s.ttlExtendEvery)
 
-					if err = lock.Refresh(ctx, s.ttl, nil); err != nil {
-						s.logger.Err(err).Msg("lock can not be extended. canceling context")
-						ch <- err
-						break
-					}
-
-					s.logger.Trace().Msg("lock extended")
+					return
 				}
-			}()
 
-			<-ch
-			cancel()
+				if errors.Is(err, redislock.ErrNotObtained) {
+					time.Sleep(s.ttlExtendEvery)
+
+					return
+				}
+
+				if err != nil {
+					s.logger.Err(errors.Wrap(err, "unexpected error from redislock")).Send()
+					time.Sleep(s.ttlExtendEvery)
+
+					return
+				}
+
+				defer func() {
+					_ = lock.Release(s.ctx)
+				}()
+
+				s.logger.Info().Msg("i am leader of the lock")
+
+				fnCh := make(chan error)
+
+				go func() {
+					defer close(fnCh)
+					defer s.recover(fnCh)
+					fnCh <- s.fn(ctx)
+				}()
+
+				ch := make(chan error)
+				go func() {
+					defer close(ch)
+					defer s.recover(ch)
+
+					for ctx.Err() == nil {
+						time.Sleep(s.ttlExtendEvery)
+
+						if err = lock.Refresh(ctx, s.ttl, nil); err != nil {
+							s.logger.Err(err).Msg("lock can not be extended. canceling context")
+							ch <- err
+							break
+						}
+
+						s.logger.Trace().Msg("lock extended")
+					}
+				}()
+
+				var finalErr error
+				select {
+				case finalErr = <-ch:
+				case finalErr = <-fnCh:
+				}
+
+				if finalErr != nil {
+					s.logger.Err(finalErr).Msg("final error")
+				}
+				cancel()
+			}()
 		}
 	}()
 

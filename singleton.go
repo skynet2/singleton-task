@@ -7,4 +7,4 @@ type Singleton interface {
 	StartAsync() error
 }
 
-type Fn func(ctx context.Context)
+type Fn func(ctx context.Context) error
