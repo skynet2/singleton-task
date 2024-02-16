@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"github.com/bsm/redislock"
-	"github.com/go-redis/redis/v9"
+	"github.com/redis/go-redis/v9"
 	singletonTask "github.com/skynet2/singleton-task"
 )
 
