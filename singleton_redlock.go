@@ -117,6 +117,8 @@ func (s *singletonRedLock) StartAsync() error {
 					defer close(ch)
 					defer s.recover(ch)
 
+					time.Sleep(s.ttlExtendEvery)
+
 					for ctx.Err() == nil {
 						if err = lock.Refresh(ctx, s.ttl, nil); err != nil {
 							s.logger.Err(err).Msg("lock can not be extended. canceling context")
