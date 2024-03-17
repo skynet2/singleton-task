@@ -102,7 +102,7 @@ func (s *singletonRedLock) StartAsync() error {
 					_ = lock.Release(s.ctx)
 				}()
 
-				s.logger.Info().Msg("i am leader of the lock")
+				s.logger.Trace().Msg("i am leader of the lock")
 
 				fnCh := make(chan error)
 
@@ -118,8 +118,6 @@ func (s *singletonRedLock) StartAsync() error {
 					defer s.recover(ch)
 
 					for ctx.Err() == nil {
-						time.Sleep(s.ttlExtendEvery)
-
 						if err = lock.Refresh(ctx, s.ttl, nil); err != nil {
 							s.logger.Err(err).Msg("lock can not be extended. canceling context")
 							ch <- err
@@ -127,6 +125,7 @@ func (s *singletonRedLock) StartAsync() error {
 						}
 
 						s.logger.Trace().Msg("lock extended")
+						time.Sleep(s.ttlExtendEvery)
 					}
 				}()
 
